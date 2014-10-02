@@ -11,102 +11,156 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.*;
 import com.amazonaws.services.ec2.model.*;
 
+
+
 public class AWSTestHarness {
 	 static Logger log = Logger.getLogger("AWSTestHarness");
-	 private Region usWest2 = Region.getRegion(Regions.US_WEST_2);
-	 private AWSCredentials credentials = null;
+	 EC2Instance ec2Instance = null;
 	 private AmazonEC2 amazonEC2Client = null;
-	 Properties instanceProperties = null;
-	 private String AMAZON_ID = null;
-	 private String IMAGE_ID = null;
-	 private String KEY_NAME = null;
 	
 	public AWSTestHarness() throws IOException{
 		try{
-			instanceProperties = new Properties();
-			instanceProperties.loadFromXML(new FileInputStream("conf/instance.xml"));
-			AMAZON_ID = instanceProperties.getProperty("aws_id");
-			IMAGE_ID = instanceProperties.getProperty("instance_id");
-			KEY_NAME = instanceProperties.getProperty("key_name");
-
-			log.info("Initializing AWSTestHarness ... ");
-			log.info("... configuring Region");
-			usWest2 = Region.getRegion(Regions.US_WEST_2);
-			log.info("... Instantiating credentials");
-			credentials = new PropertiesCredentials(new File("AwsCredentials.properties"));
-			log.info("... starting instance");
-			stopEC2Instance();
+			ec2Instance = new EC2Instance();
+			
+			//WINDOWS
+//			ec2Instance.setInstanceID("i-1a828811");
+			
+			//LINUX
+			ec2Instance.setInstanceID("i-1c068913");
+			
 //			startEC2Instance();
+
+			stopEC2Instance();
+			
 //			createEC2Instance();
+			
+//			describeAmazonInstance();
+			
 		}catch(Exception ex){
 			log.error("FATAL",ex);
 		}
 		
-		log.info("exiting ... ");
 	}
 
-	
-	private void initAWSInstance() throws Exception{
-		amazonEC2Client = null;
-		amazonEC2Client = new AmazonEC2Client(credentials);	
-	    amazonEC2Client.setRegion(usWest2);
-	    log.info("AmazonEC2Client initialized");
-	}
-	
-	
 	private void stopEC2Instance() throws Exception{
-		initAWSInstance();		
-		List<String> instancesToStart = new ArrayList<String>();
-	    instancesToStart.add(IMAGE_ID);
-	    StopInstancesRequest stopr = new StopInstancesRequest();
-	    stopr.setInstanceIds(instancesToStart);    
-	    amazonEC2Client.stopInstances(stopr);    
-	    log.info("AWS Instance shutting down ... ");
-
+		log.info("****STOP EC2 INSTANCE ****");
+		amazonEC2Client = ec2Instance.getInstance();			
+		if(isInstanceInState(ec2Instance.getInstanceID(), InstanceState.RUNNING)){
+			List<String> instancesToStart = new ArrayList<String>();
+		    instancesToStart.add(ec2Instance.getInstanceID());
+		    StopInstancesRequest stopr = new StopInstancesRequest();
+		    stopr.setInstanceIds(instancesToStart);    
+		    amazonEC2Client.stopInstances(stopr);   
+		    log.info("AWS Instance [" + ec2Instance.getInstanceID() + "] shutting down ... ");
+		    new InstanceStartupListener(ec2Instance.getInstanceID()).start();;
+		}else{
+			log.warn("Instance ID [" + ec2Instance.getInstanceID() + "] was slated to be started, however that instance is not in the 'RUNNING' state");;
+		}
 	}
-//	 StopInstancesRequest stopIR = new StopInstancesRequest(instanceIds);
 	
 	private void startEC2Instance() throws Exception{
-		initAWSInstance();		
-		List<String> instancesToStart = new ArrayList<String>();
-	    instancesToStart.add(IMAGE_ID);
-	    StartInstancesRequest startr = new StartInstancesRequest();
-	    startr.setInstanceIds(instancesToStart);    
-	    amazonEC2Client.startInstances(startr); 
-	    log.info("AWS Instance starting up ... ");
+		amazonEC2Client = ec2Instance.getInstance();
+		if(isInstanceInState(ec2Instance.getInstanceID(), InstanceState.STOPPED)){
+			List<String> instancesToStart = new ArrayList<String>();
+		    instancesToStart.add(ec2Instance.getInstanceID());
+		    StartInstancesRequest startr = new StartInstancesRequest();
+		    startr.setInstanceIds(instancesToStart);    
+		    amazonEC2Client.startInstances(startr); 
+		    log.info("AWS Instance starting up ... ");
+		    new InstanceStartupListener(ec2Instance.getInstanceID()).start();
+		}else{
+			log.warn("Instance ID [" + ec2Instance.getInstanceID() + "] was slated to be started, however that instance is not in the 'STOPPED' state");;
+		}
 	}
     
-	private void createEC2Instance() throws Exception{
-		initAWSInstance();
-	    
-	    /*
-	    DescribeImagesResult res = amazonEC2Client.describeImages(new DescribeImagesRequest().withImageIds(imageID));
-	    if (res.getImages().size() > 0 && res.getImages().get(0).getImageId().equals(imageID)) {
-	        Image image = res.getImages().get(0);
-	        log.info(image.getImageLocation() + " :: " + image.getDescription());
-	      } else {
-	    	  log.info("No such AMI: i-bad8d6b1");
-	      }
-	    */
-//	    /*
-	    
-	    
-		RunInstancesRequest runInstancesRequest = 
-				  new RunInstancesRequest();
 
-			  runInstancesRequest.withImageId(AMAZON_ID)
+	private void describeAmazonInstance() throws Exception{
+		log.info("**** DESCRIBE AMAZON INSTANCE ****");
+		amazonEC2Client = ec2Instance.getInstance();
+		DescribeInstancesResult describeInstancesRequest = null;
+		List<Reservation> reservations = null;
+		
+		describeInstancesRequest = amazonEC2Client.describeInstances();
+		reservations = describeInstancesRequest.getReservations();
+		        
+		for (Reservation reservation : reservations) {
+			for(Instance instance : reservation.getInstances()){
+				System.out.println("InstanceId: " + instance.getInstanceId());
+				System.out.println("InstanceType: " + instance.getInstanceType());
+				System.out.println("Architecture: " + instance.getArchitecture());
+				System.out.println("KeyName: " + instance.getKeyName());
+				System.out.println("ImageId: " + instance.getImageId());
+				System.out.println("LaunchTime: " + instance.getLaunchTime());
+				System.out.println("VpcId: " + instance.getVpcId());
+				System.out.println("PublicDnsName: " + instance.getPublicDnsName());
+				System.out.println("PublicIpAddress: " + instance.getPublicIpAddress());
+				System.out.println("State: " + instance.getState());
+				System.out.println("State.Name: " + instance.getState().getName());
+				System.out.println("State.Code: " + instance.getState().getCode());
+				System.out.println("StateReason: " + instance.getStateReason());
+				System.out.println("************************************************************************");
+			}//end inner-for
+		}//end-for
+		        
+	}
+	
+	
+	public boolean isInstanceInState(String instanceID, int state) throws Exception{
+		log.info("**** IS INSTANCE IN STATE ****");
+		boolean inState = false;
+		amazonEC2Client = ec2Instance.getInstance();
+		DescribeInstancesResult describeInstancesRequest = null;
+		List<Reservation> reservations = null;
+		
+		describeInstancesRequest = amazonEC2Client.describeInstances();
+		reservations = describeInstancesRequest.getReservations();
+		        
+		for (Reservation reservation : reservations) {
+			for(Instance instance : reservation.getInstances()){
+				if(instance.getInstanceId().equals(ec2Instance.getInstanceID())){
+					if(instance.getState().getCode() == state) inState = true;
+					return inState;
+				}
+			}//end inner-for
+		}//end-for
+		
+		throw new Exception("Instance ID [" + instanceID + "] does not exist or cannot be found");
+
+	}
+
+	
+	private void createEC2Instance() throws Exception{
+		amazonEC2Client = ec2Instance.getInstance();
+		RunInstancesRequest runInstancesRequest = new RunInstancesRequest();
+
+		runInstancesRequest.withImageId(ec2Instance.getAmazonMachineImage())
 			                     .withInstanceType("t2.micro")
 			                     .withMinCount(1)
 			                     .withMaxCount(1)
-			                     .withKeyName(KEY_NAME)
+			                     .withKeyName(ec2Instance.getKeyName())
 			                     .withSecurityGroups("HTTP", "Postgres Home Incoming", "SSH", "RewardStyle");
-			  RunInstancesResult runInstancesResult = 
-					  amazonEC2Client.runInstances(runInstancesRequest);
-//		*/
+		RunInstancesResult runInstancesResult = amazonEC2Client.runInstances(runInstancesRequest);
+		
+		ec2Instance.setInstanceID(runInstancesResult.getReservation().getInstances().get(0).getInstanceId());
+	    new InstanceStartupListener(ec2Instance.getInstanceID()).start();
+		
 	}
 	
 	public static void main(String[] args) throws IOException{
 		new AWSTestHarness(); 	
 	}
 
+	
+	/*
+	
+	https://aws.amazon.com/articles/3586
+http://www.kpbird.com/2013/09/aws-sdk-for-java-tutorial-2-ec2.html
+http://cloud.dzone.com/articles/step-step-aws-ec2-tutorial
+http://www.programcreek.com/java-api-examples/index.php?api=com.amazonaws.services.ec2.AmazonEC2Client
+http://docs.aws.amazon.com/powershell/latest/userguide/pstools-ec2-get-amis.html#pstools-ec2-get-image
+http://qingyeec2.blogspot.com/
+	
+	
+	*/
+	
 }

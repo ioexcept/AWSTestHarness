@@ -5,6 +5,7 @@ import java.util.*;
 
 import org.apache.log4j.Logger;
 
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.*;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
@@ -18,24 +19,44 @@ public class AWSTestHarness {
 	 EC2Instance ec2Instance = null;
 	 private AmazonEC2 amazonEC2Client = null;
 	
-	public AWSTestHarness() throws IOException{
+	public AWSTestHarness(String[] args) throws IOException{
 		try{
-			ec2Instance = new EC2Instance();
+			String credentialFile = null;
+			if(args.length < 2){
+				showHelp();
+				System.exit(-1);
+			}
 			
-			//WINDOWS
+			for(int index = 0; index <args.length; index++){
+				if(args[index].equalsIgnoreCase("-F")){
+					index++;
+					credentialFile = args[index];
+				}
+			}
+			
+			ec2Instance = new EC2Instance(credentialFile);
+			
+			
+//			WINDOWS
 //			ec2Instance.setInstanceID("i-1a828811");
 			
 			//LINUX
-			ec2Instance.setInstanceID("i-1c068913");
+//			ec2Instance.setInstanceID("i-1c068913");
 			
 //			startEC2Instance();
 
-			stopEC2Instance();
+//			stopEC2Instance();
 			
 //			createEC2Instance();
 			
-//			describeAmazonInstance();
+			describeAmazonInstance();
 			
+			
+			
+			
+			
+		}catch(AmazonServiceException ase){
+			log.error("FATAL-ASE",ase);
 		}catch(Exception ex){
 			log.error("FATAL",ex);
 		}
@@ -52,7 +73,7 @@ public class AWSTestHarness {
 		    stopr.setInstanceIds(instancesToStart);    
 		    amazonEC2Client.stopInstances(stopr);   
 		    log.info("AWS Instance [" + ec2Instance.getInstanceID() + "] shutting down ... ");
-		    new InstanceStartupListener(ec2Instance.getInstanceID()).start();;
+		    new InstanceStartupListener(ec2Instance.getInstanceID()).start();
 		}else{
 			log.warn("Instance ID [" + ec2Instance.getInstanceID() + "] was slated to be started, however that instance is not in the 'RUNNING' state");;
 		}
@@ -79,12 +100,14 @@ public class AWSTestHarness {
 		amazonEC2Client = ec2Instance.getInstance();
 		DescribeInstancesResult describeInstancesRequest = null;
 		List<Reservation> reservations = null;
-		
 		describeInstancesRequest = amazonEC2Client.describeInstances();
 		reservations = describeInstancesRequest.getReservations();
-		        
+		int currentInstance = 1;
+		int instanceCount = reservations.size();
+		System.out.println(">> Number of Instances found [" + instanceCount + "]");   
 		for (Reservation reservation : reservations) {
 			for(Instance instance : reservation.getInstances()){
+				System.out.println("Instance " + currentInstance + " of " + instanceCount); 
 				System.out.println("InstanceId: " + instance.getInstanceId());
 				System.out.println("InstanceType: " + instance.getInstanceType());
 				System.out.println("Architecture: " + instance.getArchitecture());
@@ -146,8 +169,16 @@ public class AWSTestHarness {
 		
 	}
 	
+	private void showHelp(){
+		System.out.println("Application requires user defined arguments to execute");
+		System.out.println("\tThose arguements are: -f <credential-file>");
+		System.out.println("\tThe credntial file should contain the Amazon access and secret key's in the following format ");
+		System.out.println("\taccessKey = <<your access key>>");
+		System.out.println("\tsecretKey = <<your secret key>>");
+	}
+	
 	public static void main(String[] args) throws IOException{
-		new AWSTestHarness(); 	
+		new AWSTestHarness(args); 	
 	}
 
 	

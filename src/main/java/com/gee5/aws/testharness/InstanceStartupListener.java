@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.apache.log4j.Logger;
 
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.Instance;
@@ -69,6 +70,8 @@ public class InstanceStartupListener extends Thread {
 			}
 
 
+		}catch(AmazonServiceException ase){
+			logger.error("FATAL-ASE",ase);
 		} catch (Exception ex) {
 			logger.error("FATAL",ex);
 		}
